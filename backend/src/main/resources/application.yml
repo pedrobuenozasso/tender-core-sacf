@@ -1,0 +1,12 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: sacf-tender-core
+
+tender:
+  pncp-base-url: https://pncp.gov.br/api/consulta/v1
+  allowed-origins:
+    - http://localhost:5173
+    - http://127.0.0.1:5173
