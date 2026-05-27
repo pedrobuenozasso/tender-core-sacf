@@ -12,12 +12,20 @@ const PRESETS = [
   { label: '30 dias', days: 30 },
 ]
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const ENABLE_DEMO_FALLBACK = import.meta.env.VITE_ENABLE_DEMO_FALLBACK === 'true'
+
+const UF_OPTIONS = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO',
+  'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI',
+  'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+]
+
 const form = reactive({
   mode: 'open',
   startDate: formatDateInput(lastWeek),
   endDate: formatDateInput(today),
-  states: 'SP, RJ, MG',
-  maxResults: 100,
+  state: '',
 })
 
 const keywordItems = ref([
@@ -93,7 +101,7 @@ async function search() {
   demoMode.value = false
 
   try {
-    const res = await fetch('/api/tenders/search', {
+    const res = await fetch(`${API_BASE_URL}/api/tenders/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -106,8 +114,8 @@ async function search() {
         blockedKeywords: blockedKeywords.value
           .filter(item => item.active)
           .map(item => item.text),
-        states: splitCsv(form.states),
-        maxResults: Number(form.maxResults) || 100,
+        states: form.state ? [form.state] : [],
+        maxResults: 100,
       }),
     })
 
@@ -115,9 +123,13 @@ async function search() {
     if (!res.ok) throw new Error(data.error || 'Nao foi possivel consultar o PNCP.')
     response.value = data
   } catch (err) {
-    demoMode.value = true
-    error.value = 'Backend Java indisponivel nesta visualizacao. Exibindo dados demonstrativos.'
-    response.value = buildDemoResponse()
+    if (ENABLE_DEMO_FALLBACK) {
+      demoMode.value = true
+      error.value = 'Backend Java indisponivel nesta visualizacao. Exibindo dados demonstrativos.'
+      response.value = buildDemoResponse()
+    } else {
+      error.value = err?.message || 'Nao foi possivel consultar o PNCP.'
+    }
   } finally {
     loading.value = false
   }
@@ -162,13 +174,6 @@ function deleteKeyword(id) {
 function toggleKeyword(id) {
   const keyword = keywordItems.value.find(item => item.id === id)
   if (keyword) keyword.active = !keyword.active
-}
-
-function splitCsv(value) {
-  return value
-    .split(',')
-    .map(item => item.trim().toUpperCase())
-    .filter(Boolean)
 }
 
 function normalize(value) {
@@ -281,12 +286,6 @@ function clearFilters() {
     <section class="workspace">
       <aside class="sidebar">
       <nav class="nav">
-        <button class="nav-item" type="button">
-          <span class="nav-icon">
-            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
-          </span>
-          Início
-        </button>
         <button class="nav-item" :class="{ active: activeView === 'search' }" type="button" @click="activeView = 'search'">
           <span class="nav-icon">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -299,20 +298,26 @@ function clearFilters() {
           </span>
           Palavras-chave
         </button>
-        <button class="nav-item" type="button">
-          <span class="nav-icon">
-            <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 4 4 5-8"/></svg>
-          </span>
-          Respostas
-        </button>
       </nav>
       </aside>
 
       <main class="content">
         <section class="page-heading">
           <div>
-            <h1>{{ activeView === 'keywords' ? 'Configurar Keywords' : (form.mode === 'awarded' ? 'Buscar Ganhadores' : 'Buscar Licitações') }}</h1>
-            <p>{{ activeView === 'keywords' ? 'Gerencie as palavras monitoradas e bloqueadas no PNCP.' : modeDescription }}</p>
+            <h1>
+              {{
+                activeView === 'keywords'
+                    ? 'Configurar Keywords'
+                    : (form.mode === 'awarded' ? 'Buscar Ganhadores' : 'Buscar Licitações')
+              }}
+            </h1>
+            <p>
+              {{
+                activeView === 'keywords'
+                    ? 'Gerencie as palavras monitoradas e bloqueadas no PNCP.'
+                    : modeDescription
+              }}
+            </p>
           </div>
         </section>
 
@@ -359,13 +364,11 @@ function clearFilters() {
               </div>
 
               <div class="field uf-field">
-                <label>UFs</label>
-                <input v-model="form.states" placeholder="SP, RJ, MG" />
-              </div>
-
-              <div class="field limit-field">
-                <label>Limite</label>
-                <input v-model="form.maxResults" min="1" max="1000" type="number" />
+                <label>UF</label>
+                <select v-model="form.state">
+                  <option value="">Todos os estados</option>
+                  <option v-for="uf in UF_OPTIONS" :key="uf" :value="uf">{{ uf }}</option>
+                </select>
               </div>
 
               <button class="search-button" :disabled="loading" type="submit">
@@ -379,7 +382,7 @@ function clearFilters() {
           <p v-if="error" class="notice" :class="{ warn: demoMode }">{{ error }}</p>
         </section>
 
-        <section v-else class="keyword-panel">
+        <section v-else-if="activeView === 'keywords'" class="keyword-panel">
           <div class="keyword-tabs">
             <button
               type="button"

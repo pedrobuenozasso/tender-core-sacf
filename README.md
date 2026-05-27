@@ -111,6 +111,14 @@ Servidor local:
 http://localhost:8080
 ```
 
+Variaveis importantes em producao:
+
+```text
+TENDER_ALLOWED_ORIGINS=https://seu-front.com
+```
+
+Se o frontend ficar em outro dominio, esse valor precisa conter o dominio publico do Vue. Em desenvolvimento, o projeto ja libera `http://localhost:5173` e `http://127.0.0.1:5173`.
+
 ## Frontend
 
 Stack:
@@ -154,6 +162,15 @@ O Vite esta configurado para encaminhar `/api` para:
 ```text
 http://localhost:8080
 ```
+
+Variaveis importantes:
+
+```text
+VITE_API_BASE_URL=https://sua-api-java.com
+VITE_ENABLE_DEMO_FALLBACK=false
+```
+
+Use `VITE_API_BASE_URL` quando o frontend e o backend forem publicados em dominios diferentes. Se ficarem no mesmo dominio com proxy/reverse proxy para `/api`, pode deixar vazio. O fallback demonstrativo fica desligado por padrao para nao mascarar falha de API em producao.
 
 ## Endpoints
 
