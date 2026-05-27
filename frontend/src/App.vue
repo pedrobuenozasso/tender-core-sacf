@@ -5,27 +5,77 @@ const today = new Date()
 const lastWeek = new Date(today)
 lastWeek.setDate(today.getDate() - 7)
 
+const PRESETS = [
+  { label: 'Hoje', days: 0 },
+  { label: '7 dias', days: 7 },
+  { label: '15 dias', days: 15 },
+  { label: '30 dias', days: 30 },
+]
+
 const form = reactive({
   mode: 'open',
   startDate: formatDateInput(lastWeek),
   endDate: formatDateInput(today),
-  keywords: 'software\ntecnologia',
-  blockedKeywords: '',
-  states: '',
+  keywords: 'software\ntecnologia\nlicença',
+  blockedKeywords: 'show\nfesta',
+  states: 'SP, RJ, MG',
   maxResults: 100,
 })
 
 const loading = ref(false)
 const error = ref('')
 const response = ref(null)
+const selected = ref(null)
+const filterUf = ref('')
+const filterText = ref('')
+const demoMode = ref(false)
 
 const results = computed(() => response.value?.results || [])
-const total = computed(() => response.value?.total || 0)
+const filtered = computed(() => {
+  return results.value.filter((item) => {
+    if (filterUf.value && item.state !== filterUf.value) return false
+    if (!filterText.value) return true
+
+    const query = normalize(filterText.value)
+    return [
+      item.object,
+      item.agency,
+      item.supplier,
+      item.supplierDocument,
+      item.modality,
+      ...(item.matchedKeywords || []),
+    ].some((value) => normalize(String(value || '')).includes(query))
+  })
+})
+
+const total = computed(() => response.value?.total || results.value.length)
+const states = computed(() => {
+  return [...new Set(results.value.map((item) => item.state).filter(Boolean))].sort()
+})
+const topStates = computed(() => {
+  const map = filtered.value.reduce((acc, item) => {
+    if (item.state) acc[item.state] = (acc[item.state] || 0) + 1
+    return acc
+  }, {})
+
+  return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 8)
+})
+const totalValue = computed(() => {
+  return filtered.value.reduce((sum, item) => sum + (Number(item.estimatedValue) || 0), 0)
+})
+const modeLabel = computed(() => form.mode === 'awarded' ? 'Ganhadores' : 'Licitações')
+const modeDescription = computed(() => {
+  return form.mode === 'awarded'
+    ? 'Contratos e fornecedores vencedores localizados no PNCP.'
+    : 'Editais abertos localizados no PNCP por palavra-chave e período.'
+})
 
 async function search() {
   loading.value = true
   error.value = ''
   response.value = null
+  selected.value = null
+  demoMode.value = false
 
   try {
     const res = await fetch('/api/tenders/search', {
@@ -42,14 +92,24 @@ async function search() {
       }),
     })
 
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Search failed')
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Nao foi possivel consultar o PNCP.')
     response.value = data
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Search failed'
+    demoMode.value = true
+    error.value = 'Backend Java indisponivel nesta visualizacao. Exibindo dados demonstrativos.'
+    response.value = buildDemoResponse()
   } finally {
     loading.value = false
   }
+}
+
+function applyPreset(days) {
+  const end = new Date()
+  const start = new Date()
+  start.setDate(end.getDate() - days)
+  form.startDate = formatDateInput(start)
+  form.endDate = formatDateInput(end)
 }
 
 function splitLines(value) {
@@ -66,106 +126,383 @@ function splitCsv(value) {
     .filter(Boolean)
 }
 
+function normalize(value) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
 function formatDateInput(date) {
   return date.toISOString().slice(0, 10)
 }
 
+function formatDate(value) {
+  if (!value) return '-'
+  return String(value).slice(0, 10).split('-').reverse().join('/')
+}
+
 function formatCurrency(value) {
-  if (value == null) return 'N/I'
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+  if (value == null) return '-'
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+function buildDemoResponse() {
+  const demoResults = [
+    {
+      id: 'demo-1',
+      type: form.mode,
+      pncpControlNumber: '000001/2026',
+      object: 'Contratacao de licencas de software, suporte tecnico e servicos de implantacao',
+      agency: 'Prefeitura Municipal de Sao Paulo',
+      supplier: form.mode === 'awarded' ? 'SACF Tecnologia Ltda.' : null,
+      supplierDocument: form.mode === 'awarded' ? '12.345.678/0001-90' : null,
+      state: 'SP',
+      estimatedValue: 248000,
+      publicationDate: form.endDate,
+      signatureDate: form.mode === 'awarded' ? form.endDate : null,
+      closingDate: form.mode === 'open' ? form.endDate : null,
+      pncpLink: 'https://pncp.gov.br',
+      matchedKeywords: ['software', 'licenca'],
+      modality: 'Pregao Eletronico',
+    },
+    {
+      id: 'demo-2',
+      type: form.mode,
+      pncpControlNumber: '000002/2026',
+      object: 'Aquisicao de equipamentos de tecnologia e renovacao de plataforma digital',
+      agency: 'Secretaria de Administracao',
+      supplier: form.mode === 'awarded' ? 'Fornecedor Demonstrativo S/A' : null,
+      supplierDocument: form.mode === 'awarded' ? '98.765.432/0001-10' : null,
+      state: 'RJ',
+      estimatedValue: 580000,
+      publicationDate: form.startDate,
+      signatureDate: form.mode === 'awarded' ? form.startDate : null,
+      closingDate: form.mode === 'open' ? form.endDate : null,
+      pncpLink: 'https://pncp.gov.br',
+      matchedKeywords: ['tecnologia'],
+      modality: 'Concorrencia',
+    },
+    {
+      id: 'demo-3',
+      type: form.mode,
+      pncpControlNumber: '000003/2026',
+      object: 'Servicos continuados de monitoramento, integracao e atendimento operacional',
+      agency: 'Instituto Federal de Minas Gerais',
+      supplier: form.mode === 'awarded' ? 'Integracao Brasil Ltda.' : null,
+      supplierDocument: form.mode === 'awarded' ? '21.000.111/0001-55' : null,
+      state: 'MG',
+      estimatedValue: 126500,
+      publicationDate: form.startDate,
+      signatureDate: form.mode === 'awarded' ? form.endDate : null,
+      closingDate: form.mode === 'open' ? form.endDate : null,
+      pncpLink: 'https://pncp.gov.br',
+      matchedKeywords: ['software', 'tecnologia'],
+      modality: 'Dispensa',
+    },
+  ]
+
+  return {
+    mode: form.mode,
+    startDate: form.startDate,
+    endDate: form.endDate,
+    total: demoResults.length,
+    results: demoResults,
+  }
+}
+
+function clearFilters() {
+  filterUf.value = ''
+  filterText.value = ''
 }
 </script>
 
 <template>
-  <main class="app-shell">
-    <section class="toolbar">
-      <div>
-        <p class="eyebrow">SACF Tender Core</p>
-        <h1>PNCP search API</h1>
+  <div class="app-frame">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/brand/sacf-app-icon.png" alt="" />
+        <div>
+          <strong>SACF</strong>
+          <small>Tender Core</small>
+        </div>
       </div>
-      <a class="api-link" href="/api/health" target="_blank" rel="noreferrer">Health</a>
+
+      <nav class="nav">
+        <button class="nav-item active" type="button">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          </span>
+          Busca PNCP
+        </button>
+        <button class="nav-item" type="button">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><path d="M7 7h.01"/></svg>
+          </span>
+          Keywords
+        </button>
+        <button class="nav-item" type="button">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 4 4 5-8"/></svg>
+          </span>
+          Resultados
+        </button>
+      </nav>
+
+      <div class="sidebar-status">
+        <span>Modulo aberto</span>
+        <strong>Sem usuarios, Stripe ou banco</strong>
+      </div>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <button class="topbar-brand" type="button">
+          <img src="/brand/sacf-app-icon.png" alt="" />
+          <span>
+            <strong>SACF</strong>
+            <small>PNCP Search API</small>
+          </span>
+        </button>
+
+        <a class="health-link" href="/api/health" target="_blank" rel="noreferrer">
+          Health
+          <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
+        </a>
+      </header>
+
+      <main class="content">
+        <section class="page-heading">
+          <div>
+            <h1>{{ form.mode === 'awarded' ? 'Buscar Ganhadores' : 'Buscar Licitações' }}</h1>
+            <p>{{ modeDescription }}</p>
+          </div>
+          <div class="mode-badge">
+            <span>{{ demoMode ? 'Modo visual' : 'Core API' }}</span>
+            <strong>Java + Vue</strong>
+          </div>
+        </section>
+
+        <section class="search-card">
+          <form @submit.prevent="search">
+            <div class="controls-grid">
+              <div class="field mode-field">
+                <label>Tipo de busca</label>
+                <div class="segmented">
+                  <button
+                    type="button"
+                    :class="{ active: form.mode === 'open' }"
+                    @click="form.mode = 'open'"
+                  >
+                    Abertas
+                  </button>
+                  <button
+                    type="button"
+                    :class="{ active: form.mode === 'awarded' }"
+                    @click="form.mode = 'awarded'"
+                  >
+                    Ganhadores
+                  </button>
+                </div>
+              </div>
+
+              <div class="field preset-field">
+                <label>Periodo</label>
+                <div class="preset-row">
+                  <button v-for="preset in PRESETS" :key="preset.label" type="button" @click="applyPreset(preset.days)">
+                    {{ preset.label }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>De</label>
+                <input v-model="form.startDate" type="date" />
+              </div>
+
+              <div class="field">
+                <label>Ate</label>
+                <input v-model="form.endDate" type="date" />
+              </div>
+
+              <div class="field">
+                <label>UFs</label>
+                <input v-model="form.states" placeholder="SP, RJ, MG" />
+              </div>
+
+              <div class="field limit-field">
+                <label>Limite</label>
+                <input v-model="form.maxResults" min="1" max="1000" type="number" />
+              </div>
+
+              <div class="field text-field">
+                <label>Keywords monitoradas</label>
+                <textarea v-model="form.keywords" rows="4" />
+              </div>
+
+              <div class="field text-field">
+                <label>Keywords bloqueadas</label>
+                <textarea v-model="form.blockedKeywords" rows="4" placeholder="Opcional" />
+              </div>
+
+              <button class="search-button" :disabled="loading" type="submit">
+                <span v-if="loading" class="spinner" />
+                <svg v-else viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                {{ loading ? 'Buscando...' : 'Buscar' }}
+              </button>
+            </div>
+          </form>
+
+          <p v-if="error" class="notice" :class="{ warn: demoMode }">{{ error }}</p>
+        </section>
+
+        <section v-if="response" class="kpi-row">
+          <article class="kpi-card">
+            <span>{{ modeLabel }}</span>
+            <strong>{{ total }}</strong>
+            <small>{{ filtered.length }} visiveis com filtros</small>
+          </article>
+          <article class="kpi-card blue">
+            <span>{{ form.mode === 'awarded' ? 'Valor contratado' : 'Valor estimado' }}</span>
+            <strong>{{ formatCurrency(totalValue) }}</strong>
+            <small>Soma dos resultados filtrados</small>
+          </article>
+          <article class="kpi-card">
+            <span>Estados</span>
+            <strong>{{ states.length }}</strong>
+            <small>UFs com resultados</small>
+          </article>
+          <article class="kpi-card">
+            <span>Periodo</span>
+            <strong>{{ formatDate(form.startDate) }}</strong>
+            <small>ate {{ formatDate(form.endDate) }}</small>
+          </article>
+        </section>
+
+        <section v-if="response" class="results-panel">
+          <div class="filters-bar">
+            <span>UFs</span>
+            <button
+              v-for="[uf, count] in topStates"
+              :key="uf"
+              type="button"
+              class="uf-chip"
+              :class="{ active: filterUf === uf }"
+              @click="filterUf = filterUf === uf ? '' : uf"
+            >
+              {{ uf }} <small>{{ count }}</small>
+            </button>
+
+            <div class="table-tools">
+              <select v-model="filterUf">
+                <option value="">Todos os estados</option>
+                <option v-for="uf in states" :key="uf" :value="uf">{{ uf }}</option>
+              </select>
+              <input v-model="filterText" placeholder="Filtrar resultados" />
+              <button v-if="filterUf || filterText" type="button" @click="clearFilters">Limpar</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>UF</th>
+                  <th>{{ form.mode === 'awarded' ? 'Fornecedor' : 'Orgao' }}</th>
+                  <th>Objeto</th>
+                  <th>Keywords</th>
+                  <th>{{ form.mode === 'awarded' ? 'Assinatura' : 'Encerramento' }}</th>
+                  <th class="right">Valor</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="filtered.length === 0">
+                  <td colspan="8" class="empty-row">Nenhum resultado encontrado.</td>
+                </tr>
+                <tr v-for="item in filtered" :key="item.id || item.pncpControlNumber" @click="selected = item">
+                  <td>{{ formatDate(item.publicationDate) }}</td>
+                  <td><span class="state-pill">{{ item.state || '-' }}</span></td>
+                  <td class="strong-cell">{{ form.mode === 'awarded' ? (item.supplier || '-') : (item.agency || '-') }}</td>
+                  <td class="object-cell">{{ item.object || '-' }}</td>
+                  <td class="keyword-cell">{{ (item.matchedKeywords || []).join(', ') || '-' }}</td>
+                  <td>{{ formatDate(form.mode === 'awarded' ? item.signatureDate : item.closingDate) }}</td>
+                  <td class="right strong-cell">{{ formatCurrency(item.estimatedValue) }}</td>
+                  <td class="right">
+                    <a v-if="item.pncpLink" :href="item.pncpLink" target="_blank" rel="noreferrer" @click.stop>
+                      <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
+                    </a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section v-else class="empty-state">
+          <div>
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          </div>
+          <strong>Pronto para buscar</strong>
+          <p>Informe keywords, UFs e periodo para consultar o PNCP pelo backend Java.</p>
+        </section>
+      </main>
     </section>
 
-    <section class="search-panel">
-      <div class="field compact">
-        <label>Mode</label>
-        <select v-model="form.mode">
-          <option value="open">Open tenders</option>
-          <option value="awarded">Awarded contracts</option>
-        </select>
-      </div>
-
-      <div class="field compact">
-        <label>Start</label>
-        <input v-model="form.startDate" type="date" />
-      </div>
-
-      <div class="field compact">
-        <label>End</label>
-        <input v-model="form.endDate" type="date" />
-      </div>
-
-      <div class="field compact">
-        <label>UFs</label>
-        <input v-model="form.states" placeholder="SP, RJ" />
-      </div>
-
-      <div class="field compact">
-        <label>Limit</label>
-        <input v-model="form.maxResults" min="1" max="1000" type="number" />
-      </div>
-
-      <div class="field wide">
-        <label>Keywords</label>
-        <textarea v-model="form.keywords" rows="4" />
-      </div>
-
-      <div class="field wide">
-        <label>Blocked keywords</label>
-        <textarea v-model="form.blockedKeywords" rows="4" placeholder="Optional" />
-      </div>
-
-      <button class="search-button" :disabled="loading" @click="search">
-        {{ loading ? 'Searching...' : 'Search PNCP' }}
-      </button>
-    </section>
-
-    <p v-if="error" class="error">{{ error }}</p>
-
-    <section v-if="response" class="summary">
-      <strong>{{ total }}</strong>
-      <span>results for {{ response.mode }} between {{ response.startDate }} and {{ response.endDate }}</span>
-    </section>
-
-    <section class="results">
-      <article v-for="item in results" :key="item.id" class="result-card">
+    <div v-if="selected" class="drawer-backdrop" @click="selected = null">
+      <aside class="drawer" @click.stop>
         <header>
-          <span class="tag">{{ item.type }}</span>
-          <span class="state">{{ item.state || 'UF N/I' }}</span>
+          <span class="state-pill">{{ selected.state || '-' }}</span>
+          <button type="button" @click="selected = null">x</button>
         </header>
-        <h2>{{ item.object || 'Object unavailable' }}</h2>
-        <p class="agency">{{ item.agency || 'Agency unavailable' }}</p>
+        <h2>{{ form.mode === 'awarded' ? (selected.supplier || selected.agency) : selected.agency }}</h2>
+        <p>{{ selected.modality || 'Modalidade nao informada' }}</p>
+
+        <div class="drawer-value">
+          <span>{{ form.mode === 'awarded' ? 'Valor contratado' : 'Valor estimado' }}</span>
+          <strong>{{ formatCurrency(selected.estimatedValue) }}</strong>
+        </div>
+
         <dl>
           <div>
-            <dt>Value</dt>
-            <dd>{{ formatCurrency(item.estimatedValue) }}</dd>
+            <dt>N controle PNCP</dt>
+            <dd>{{ selected.pncpControlNumber || '-' }}</dd>
+          </div>
+          <div v-if="form.mode === 'awarded'">
+            <dt>CNPJ fornecedor</dt>
+            <dd>{{ selected.supplierDocument || '-' }}</dd>
           </div>
           <div>
-            <dt>Publication</dt>
-            <dd>{{ item.publicationDate || 'N/I' }}</dd>
+            <dt>Publicacao</dt>
+            <dd>{{ formatDate(selected.publicationDate) }}</dd>
           </div>
           <div>
-            <dt>Closing</dt>
-            <dd>{{ item.closingDate || 'N/I' }}</dd>
-          </div>
-          <div v-if="item.supplier">
-            <dt>Supplier</dt>
-            <dd>{{ item.supplier }}</dd>
+            <dt>{{ form.mode === 'awarded' ? 'Assinatura' : 'Encerramento' }}</dt>
+            <dd>{{ formatDate(form.mode === 'awarded' ? selected.signatureDate : selected.closingDate) }}</dd>
           </div>
         </dl>
-        <p class="keywords">{{ item.matchedKeywords.join(', ') }}</p>
-        <a v-if="item.pncpLink" :href="item.pncpLink" target="_blank" rel="noreferrer">Open PNCP</a>
-      </article>
-    </section>
-  </main>
+
+        <section>
+          <h3>Objeto</h3>
+          <p>{{ selected.object || '-' }}</p>
+        </section>
+
+        <section v-if="selected.matchedKeywords?.length">
+          <h3>Keywords detectadas</h3>
+          <div class="drawer-tags">
+            <span v-for="keyword in selected.matchedKeywords" :key="keyword">{{ keyword }}</span>
+          </div>
+        </section>
+
+        <a v-if="selected.pncpLink" class="drawer-link" :href="selected.pncpLink" target="_blank" rel="noreferrer">
+          Abrir no PNCP
+        </a>
+      </aside>
+    </div>
+  </div>
 </template>
