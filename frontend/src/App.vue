@@ -16,17 +16,26 @@ const form = reactive({
   mode: 'open',
   startDate: formatDateInput(lastWeek),
   endDate: formatDateInput(today),
-  keywords: 'software\ntecnologia\nlicença',
-  blockedKeywords: 'show\nfesta',
   states: 'SP, RJ, MG',
   maxResults: 100,
 })
+
+const keywordItems = ref([
+  { id: 1, text: 'software', type: 'monitored', active: true },
+  { id: 2, text: 'tecnologia', type: 'monitored', active: true },
+  { id: 3, text: 'licença', type: 'monitored', active: true },
+  { id: 4, text: 'show', type: 'blocked', active: true },
+  { id: 5, text: 'festa', type: 'blocked', active: true },
+])
 
 const loading = ref(false)
 const error = ref('')
 const response = ref(null)
 const selected = ref(null)
-const activeView = ref('search')
+const activeView = ref(typeof window !== 'undefined' && window.location.hash === '#keywords' ? 'keywords' : 'search')
+const keywordTab = ref('monitored')
+const newKeyword = ref('')
+const keywordError = ref('')
 const filterUf = ref('')
 const filterText = ref('')
 const demoMode = ref(false)
@@ -64,6 +73,11 @@ const topStates = computed(() => {
 const totalValue = computed(() => {
   return filtered.value.reduce((sum, item) => sum + (Number(item.estimatedValue) || 0), 0)
 })
+const monitoredKeywords = computed(() => keywordItems.value.filter(item => item.type === 'monitored'))
+const blockedKeywords = computed(() => keywordItems.value.filter(item => item.type === 'blocked'))
+const currentKeywords = computed(() => keywordTab.value === 'blocked' ? blockedKeywords.value : monitoredKeywords.value)
+const activeMonitoredCount = computed(() => monitoredKeywords.value.filter(item => item.active).length)
+const activeBlockedCount = computed(() => blockedKeywords.value.filter(item => item.active).length)
 const modeLabel = computed(() => form.mode === 'awarded' ? 'Ganhadores' : 'Licitações')
 const modeDescription = computed(() => {
   return form.mode === 'awarded'
@@ -86,8 +100,12 @@ async function search() {
         mode: form.mode,
         startDate: form.startDate,
         endDate: form.endDate,
-        keywords: splitLines(form.keywords).map(text => ({ text, qualifiers: [] })),
-        blockedKeywords: splitLines(form.blockedKeywords),
+        keywords: monitoredKeywords.value
+          .filter(item => item.active)
+          .map(item => ({ text: item.text, qualifiers: [] })),
+        blockedKeywords: blockedKeywords.value
+          .filter(item => item.active)
+          .map(item => item.text),
         states: splitCsv(form.states),
         maxResults: Number(form.maxResults) || 100,
       }),
@@ -113,11 +131,37 @@ function applyPreset(days) {
   form.endDate = formatDateInput(end)
 }
 
-function splitLines(value) {
-  return value
-    .split(/\n|,/)
-    .map(item => item.trim())
-    .filter(Boolean)
+function addKeyword() {
+  const text = newKeyword.value.trim()
+  keywordError.value = ''
+  if (!text) return
+
+  const type = keywordTab.value === 'blocked' ? 'blocked' : 'monitored'
+  const exists = keywordItems.value.some((item) => (
+    item.type === type && normalize(item.text) === normalize(text)
+  ))
+
+  if (exists) {
+    keywordError.value = 'Essa keyword ja esta cadastrada.'
+    return
+  }
+
+  keywordItems.value.unshift({
+    id: Date.now(),
+    text,
+    type,
+    active: true,
+  })
+  newKeyword.value = ''
+}
+
+function deleteKeyword(id) {
+  keywordItems.value = keywordItems.value.filter(item => item.id !== id)
+}
+
+function toggleKeyword(id) {
+  const keyword = keywordItems.value.find(item => item.id === id)
+  if (keyword) keyword.active = !keyword.active
 }
 
 function splitCsv(value) {
@@ -224,27 +268,36 @@ function clearFilters() {
 
 <template>
   <div class="app-frame">
-    <aside class="sidebar">
-      <div class="brand">
+    <header class="topbar">
+      <button class="topbar-brand" type="button" @click="activeView = 'search'">
         <img src="/brand/sacf-app-icon.png" alt="" />
-        <div>
+        <span>
           <strong>SACF</strong>
-          <small>Tender Core</small>
-        </div>
-      </div>
+          <small>Tender</small>
+        </span>
+      </button>
+    </header>
 
+    <section class="workspace">
+      <aside class="sidebar">
       <nav class="nav">
+        <button class="nav-item" type="button">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+          </span>
+          Início
+        </button>
         <button class="nav-item" :class="{ active: activeView === 'search' }" type="button" @click="activeView = 'search'">
           <span class="nav-icon">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           </span>
-          Busca PNCP
+          Licitações
         </button>
         <button class="nav-item" :class="{ active: activeView === 'keywords' }" type="button" @click="activeView = 'keywords'">
           <span class="nav-icon">
             <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><path d="M7 7h.01"/></svg>
           </span>
-          Keywords
+          Palavras-chave
         </button>
         <button class="nav-item" type="button">
           <span class="nav-icon">
@@ -253,33 +306,13 @@ function clearFilters() {
           Respostas
         </button>
       </nav>
-
-      <div class="sidebar-status">
-        <strong>Modulo limpo para integrar na plataforma SACF</strong>
-      </div>
-    </aside>
-
-    <section class="workspace">
-      <header class="topbar">
-        <button class="topbar-brand" type="button">
-          <img src="/brand/sacf-app-icon.png" alt="" />
-          <span>
-            <strong>SACF</strong>
-            <small>Tender Core</small>
-          </span>
-        </button>
-
-        <a class="health-link" href="/api/health" target="_blank" rel="noreferrer">
-          Health
-          <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
-        </a>
-      </header>
+      </aside>
 
       <main class="content">
         <section class="page-heading">
           <div>
             <h1>{{ activeView === 'keywords' ? 'Configurar Keywords' : (form.mode === 'awarded' ? 'Buscar Ganhadores' : 'Buscar Licitações') }}</h1>
-            <p>{{ activeView === 'keywords' ? 'Configure os termos usados pelo backend Java nas consultas ao PNCP.' : modeDescription }}</p>
+            <p>{{ activeView === 'keywords' ? 'Gerencie as palavras monitoradas e bloqueadas no PNCP.' : modeDescription }}</p>
           </div>
         </section>
 
@@ -307,7 +340,7 @@ function clearFilters() {
               </div>
 
               <div class="field preset-field">
-                <label>Periodo</label>
+                <label>Período</label>
                 <div class="preset-row">
                   <button v-for="preset in PRESETS" :key="preset.label" type="button" @click="applyPreset(preset.days)">
                     {{ preset.label }}
@@ -321,7 +354,7 @@ function clearFilters() {
               </div>
 
               <div class="field date-field">
-                <label>Ate</label>
+                <label>Até</label>
                 <input v-model="form.endDate" type="date" />
               </div>
 
@@ -347,30 +380,68 @@ function clearFilters() {
         </section>
 
         <section v-else class="keyword-panel">
-          <div class="keyword-panel-header">
-            <div>
-              <span>Perfil de busca</span>
-              <h2>Keywords do monitoramento</h2>
-            </div>
-            <button type="button" @click="activeView = 'search'">Voltar para busca</button>
+          <div class="keyword-tabs">
+            <button
+              type="button"
+              :class="{ active: keywordTab === 'monitored' }"
+              @click="keywordTab = 'monitored'; keywordError = ''"
+            >
+              Monitoradas <span>{{ activeMonitoredCount }}</span>
+            </button>
+            <button
+              type="button"
+              class="danger"
+              :class="{ active: keywordTab === 'blocked' }"
+              @click="keywordTab = 'blocked'; keywordError = ''"
+            >
+              Proibidas <span>{{ activeBlockedCount }}</span>
+            </button>
           </div>
 
-          <div class="keyword-grid">
-            <label class="keyword-box">
-              <span>Termos buscados</span>
-              <textarea v-model="form.keywords" spellcheck="false" placeholder="software&#10;tecnologia&#10;licença" />
-              <small>Use uma palavra ou expressão por linha.</small>
-            </label>
+          <form class="keyword-add-form" @submit.prevent="addKeyword">
+            <input
+              v-model="newKeyword"
+              :placeholder="keywordTab === 'blocked' ? 'Nova palavra proibida' : 'Nova palavra monitorada'"
+            />
+            <button type="submit" :class="{ danger: keywordTab === 'blocked' }" :disabled="!newKeyword.trim()">
+              <svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              Adicionar
+            </button>
+          </form>
 
-            <label class="keyword-box">
-              <span>Termos bloqueados</span>
-              <textarea v-model="form.blockedKeywords" spellcheck="false" placeholder="show&#10;festa" />
-              <small>Resultados com estes termos podem ser descartados pela API.</small>
-            </label>
+          <p v-if="keywordError" class="keyword-error">{{ keywordError }}</p>
+
+          <div class="keyword-help" :class="{ danger: keywordTab === 'blocked' }">
+            <svg v-if="keywordTab === 'monitored'" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+            <svg v-else viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+            <p v-if="keywordTab === 'monitored'">
+              <strong>Monitoradas</strong> entram na busca enviada para a API Java.
+            </p>
+            <p v-else>
+              Contratos com qualquer <strong>palavra proibida</strong> são excluídos dos resultados.
+            </p>
+          </div>
+
+          <div class="keyword-list">
+            <article v-for="item in currentKeywords" :key="item.id" class="keyword-row" :class="{ disabled: !item.active, danger: item.type === 'blocked' }">
+              <span>{{ item.text }}</span>
+              <div>
+                <button class="toggle" type="button" :class="{ on: item.active }" @click="toggleKeyword(item.id)" :aria-label="item.active ? 'Desativar' : 'Ativar'">
+                  <i />
+                </button>
+                <button class="delete-keyword" type="button" @click="deleteKeyword(item.id)" aria-label="Excluir keyword">
+                  <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </button>
+              </div>
+            </article>
+
+            <div v-if="currentKeywords.length === 0" class="keyword-empty">
+              Nenhuma palavra cadastrada.
+            </div>
           </div>
         </section>
 
-        <section v-if="response" class="kpi-row">
+        <section v-if="activeView === 'search' && response" class="kpi-row">
           <article class="kpi-card">
             <span>{{ modeLabel }}</span>
             <strong>{{ total }}</strong>
@@ -393,7 +464,7 @@ function clearFilters() {
           </article>
         </section>
 
-        <section v-if="response" class="results-panel">
+        <section v-if="activeView === 'search' && response" class="results-panel">
           <div class="filters-bar">
             <span>UFs</span>
             <button
@@ -454,7 +525,7 @@ function clearFilters() {
           </div>
         </section>
 
-        <section v-else class="empty-state">
+        <section v-else-if="activeView === 'search'" class="empty-state">
           <div>
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           </div>
