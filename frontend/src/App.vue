@@ -67,7 +67,7 @@ const modeLabel = computed(() => form.mode === 'awarded' ? 'Ganhadores' : 'Licit
 const modeDescription = computed(() => {
   return form.mode === 'awarded'
     ? 'Contratos e fornecedores vencedores localizados no PNCP.'
-    : 'Editais abertos localizados no PNCP por palavra-chave e período.'
+    : 'Editais abertos localizados no PNCP por período e estado.'
 })
 
 async function search() {
@@ -243,19 +243,19 @@ function clearFilters() {
           <span class="nav-icon">
             <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><path d="M7 7h.01"/></svg>
           </span>
-          Keywords
+          Integração
         </button>
         <button class="nav-item" type="button">
           <span class="nav-icon">
             <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 4 4 5-8"/></svg>
           </span>
-          Resultados
+          Respostas
         </button>
       </nav>
 
       <div class="sidebar-status">
         <span>Modulo aberto</span>
-        <strong>Sem usuarios, Stripe ou banco</strong>
+        <strong>Modulo limpo para integrar na plataforma SACF</strong>
       </div>
     </aside>
 
@@ -265,7 +265,7 @@ function clearFilters() {
           <img src="/brand/sacf-app-icon.png" alt="" />
           <span>
             <strong>SACF</strong>
-            <small>PNCP Search API</small>
+            <small>Tender Core</small>
           </span>
         </button>
 
@@ -319,17 +319,17 @@ function clearFilters() {
                 </div>
               </div>
 
-              <div class="field">
+              <div class="field date-field">
                 <label>De</label>
                 <input v-model="form.startDate" type="date" />
               </div>
 
-              <div class="field">
+              <div class="field date-field">
                 <label>Ate</label>
                 <input v-model="form.endDate" type="date" />
               </div>
 
-              <div class="field">
+              <div class="field uf-field">
                 <label>UFs</label>
                 <input v-model="form.states" placeholder="SP, RJ, MG" />
               </div>
@@ -337,16 +337,6 @@ function clearFilters() {
               <div class="field limit-field">
                 <label>Limite</label>
                 <input v-model="form.maxResults" min="1" max="1000" type="number" />
-              </div>
-
-              <div class="field text-field">
-                <label>Keywords monitoradas</label>
-                <textarea v-model="form.keywords" rows="4" />
-              </div>
-
-              <div class="field text-field">
-                <label>Keywords bloqueadas</label>
-                <textarea v-model="form.blockedKeywords" rows="4" placeholder="Opcional" />
               </div>
 
               <button class="search-button" :disabled="loading" type="submit">
@@ -449,7 +439,7 @@ function clearFilters() {
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           </div>
           <strong>Pronto para buscar</strong>
-          <p>Informe keywords, UFs e periodo para consultar o PNCP pelo backend Java.</p>
+          <p>Selecione o modo, período e estados para consultar o PNCP pelo backend Java.</p>
         </section>
       </main>
     </section>
