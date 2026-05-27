@@ -26,6 +26,7 @@
   --panel: rgba(17, 25, 35, 0.88);
   --topbar-h: 52px;
   --sidebar-w: 220px;
+  --control-h: 40px;
   color: var(--text);
   background: var(--bg);
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Arial, sans-serif;
@@ -277,32 +278,8 @@ svg {
   margin-top: 4px;
 }
 
-.mode-badge {
-  align-items: flex-end;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 8px 12px;
-  white-space: nowrap;
-}
-
-.mode-badge span {
-  color: var(--gray);
-  font-size: 10px;
-  font-weight: 850;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.mode-badge strong {
-  color: var(--blue-lt);
-  font-size: 13px;
-}
-
 .search-card,
+.keyword-panel,
 .results-panel,
 .empty-state {
   background: var(--bg-2);
@@ -318,14 +295,31 @@ svg {
   align-items: end;
   display: grid;
   gap: 12px;
-  grid-template-columns:
-    minmax(184px, 1.05fr)
-    minmax(270px, 1.35fr)
-    minmax(132px, 0.72fr)
-    minmax(132px, 0.72fr)
-    minmax(150px, 0.8fr)
-    minmax(92px, 0.48fr)
-    minmax(126px, 0.62fr);
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+}
+
+.mode-field {
+  grid-column: span 2;
+}
+
+.preset-field {
+  grid-column: span 3;
+}
+
+.date-field {
+  grid-column: span 2;
+}
+
+.uf-field {
+  grid-column: span 2;
+}
+
+.limit-field {
+  grid-column: span 1;
+}
+
+.search-button {
+  grid-column: span 2;
 }
 
 .field {
@@ -350,7 +344,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
-  min-height: 38px;
+  min-height: var(--control-h);
   outline: 0;
   padding: 8px 12px;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -376,6 +370,7 @@ textarea:focus {
   border-radius: 8px;
   display: flex;
   gap: 4px;
+  min-height: var(--control-h);
   padding: 4px;
 }
 
@@ -401,14 +396,17 @@ textarea:focus {
 }
 
 .preset-row {
-  display: flex;
+  display: grid;
   gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   min-width: 0;
 }
 
 .preset-row button {
   background: var(--bg-3);
   border: 1px solid var(--border);
+  min-width: 0;
+  padding: 0 8px;
 }
 
 .preset-row button:hover {
@@ -427,10 +425,81 @@ textarea:focus {
   font-weight: 800;
   gap: 8px;
   justify-content: center;
-  min-height: 38px;
+  min-height: var(--control-h);
   padding: 0 18px;
   transition: background 0.15s, opacity 0.15s;
   white-space: nowrap;
+}
+
+.keyword-panel {
+  padding: 20px;
+}
+
+.keyword-panel-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: -2px 0 18px;
+  padding-bottom: 16px;
+}
+
+.keyword-panel-header span,
+.keyword-box > span {
+  color: var(--gray);
+  display: block;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.keyword-panel-header h2 {
+  color: var(--white);
+  font-size: 18px;
+  line-height: 1.2;
+  margin-top: 5px;
+}
+
+.keyword-panel-header button {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 800;
+  min-height: 36px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.keyword-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.keyword-box {
+  background: rgba(17, 26, 43, 0.58);
+  border: 1px solid var(--border-muted);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.keyword-box textarea {
+  line-height: 1.5;
+  min-height: 178px;
+}
+
+.keyword-box small {
+  color: var(--gray);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .search-button:hover:not(:disabled) {
@@ -944,26 +1013,24 @@ td a svg {
     display: block;
   }
 
-  .mode-badge {
-    align-items: flex-start;
-    display: inline-flex;
-    margin-top: 14px;
-  }
-
   .controls-grid,
+  .keyword-grid,
   .kpi-row {
     grid-template-columns: 1fr;
   }
 
   .mode-field,
   .preset-field,
+  .date-field,
   .uf-field,
+  .limit-field,
   .search-button {
     grid-column: auto;
   }
 
-  .preset-row {
-    flex-wrap: wrap;
+  .keyword-panel-header {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .filters-bar {

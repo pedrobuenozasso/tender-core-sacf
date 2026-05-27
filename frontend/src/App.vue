@@ -26,6 +26,7 @@ const loading = ref(false)
 const error = ref('')
 const response = ref(null)
 const selected = ref(null)
+const activeView = ref('search')
 const filterUf = ref('')
 const filterText = ref('')
 const demoMode = ref(false)
@@ -233,17 +234,17 @@ function clearFilters() {
       </div>
 
       <nav class="nav">
-        <button class="nav-item active" type="button">
+        <button class="nav-item" :class="{ active: activeView === 'search' }" type="button" @click="activeView = 'search'">
           <span class="nav-icon">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           </span>
           Busca PNCP
         </button>
-        <button class="nav-item" type="button">
+        <button class="nav-item" :class="{ active: activeView === 'keywords' }" type="button" @click="activeView = 'keywords'">
           <span class="nav-icon">
             <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><path d="M7 7h.01"/></svg>
           </span>
-          Integração
+          Keywords
         </button>
         <button class="nav-item" type="button">
           <span class="nav-icon">
@@ -254,7 +255,6 @@ function clearFilters() {
       </nav>
 
       <div class="sidebar-status">
-        <span>Modulo aberto</span>
         <strong>Modulo limpo para integrar na plataforma SACF</strong>
       </div>
     </aside>
@@ -278,16 +278,12 @@ function clearFilters() {
       <main class="content">
         <section class="page-heading">
           <div>
-            <h1>{{ form.mode === 'awarded' ? 'Buscar Ganhadores' : 'Buscar Licitações' }}</h1>
-            <p>{{ modeDescription }}</p>
-          </div>
-          <div class="mode-badge">
-            <span>{{ demoMode ? 'Modo visual' : 'Core API' }}</span>
-            <strong>Java + Vue</strong>
+            <h1>{{ activeView === 'keywords' ? 'Configurar Keywords' : (form.mode === 'awarded' ? 'Buscar Ganhadores' : 'Buscar Licitações') }}</h1>
+            <p>{{ activeView === 'keywords' ? 'Configure os termos usados pelo backend Java nas consultas ao PNCP.' : modeDescription }}</p>
           </div>
         </section>
 
-        <section class="search-card">
+        <section v-if="activeView === 'search'" class="search-card">
           <form @submit.prevent="search">
             <div class="controls-grid">
               <div class="field mode-field">
@@ -348,6 +344,30 @@ function clearFilters() {
           </form>
 
           <p v-if="error" class="notice" :class="{ warn: demoMode }">{{ error }}</p>
+        </section>
+
+        <section v-else class="keyword-panel">
+          <div class="keyword-panel-header">
+            <div>
+              <span>Perfil de busca</span>
+              <h2>Keywords do monitoramento</h2>
+            </div>
+            <button type="button" @click="activeView = 'search'">Voltar para busca</button>
+          </div>
+
+          <div class="keyword-grid">
+            <label class="keyword-box">
+              <span>Termos buscados</span>
+              <textarea v-model="form.keywords" spellcheck="false" placeholder="software&#10;tecnologia&#10;licença" />
+              <small>Use uma palavra ou expressão por linha.</small>
+            </label>
+
+            <label class="keyword-box">
+              <span>Termos bloqueados</span>
+              <textarea v-model="form.blockedKeywords" spellcheck="false" placeholder="show&#10;festa" />
+              <small>Resultados com estes termos podem ser descartados pela API.</small>
+            </label>
+          </div>
         </section>
 
         <section v-if="response" class="kpi-row">
